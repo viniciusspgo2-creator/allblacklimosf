@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
 import { BookingWizard } from "@/components/booking-wizard";
 import { JsonLd } from "@/components/json-ld";
 import { site } from "@/lib/site-data";
@@ -68,7 +69,9 @@ export default function BookNowPage() {
 
       <section className="section section--dark">
         <div className="site-shell">
-          <BookingWizard />
+          <Suspense fallback={null}>
+            <BookingWizard />
+          </Suspense>
         </div>
       </section>
 

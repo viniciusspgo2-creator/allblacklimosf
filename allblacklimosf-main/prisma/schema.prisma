@@ -1,0 +1,151 @@
+// Prisma schema for All Black Limo SF (Next.js conversion)
+// Vercel + Neon PostgreSQL deployment ready.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// ---------- Auth / Admin ----------
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions AdminSession[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  adminId   String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+}
+
+// ---------- Booking & Contact ----------
+
+model Booking {
+  id              String   @id @default(cuid())
+  firstName       String
+  lastName        String
+  email           String
+  phone           String
+  serviceType     String
+  vehicleType     String   @default("")
+  pickupDate      String
+  pickupTime      String
+  passengers      Int
+  luggage         Int      @default(0)
+  pickupAddress   String
+  dropoffAddress  String
+  flightNumber    String?  @default("")
+  hours           Int?
+  couponCode      String?  @default("")
+  notes           String?  @default("")
+  distanceKm      Float?
+  durationMin     Int?
+  consent         Boolean  @default(false)
+  ip              String?  @default("")
+  userAgent       String?  @default("")
+  status          String   @default("new")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String   @default("")
+  subject   String
+  message   String
+  consent   Boolean  @default(false)
+  ip        String?  @default("")
+  userAgent String?  @default("")
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+// ---------- Blog ----------
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  excerpt     String
+  content     String
+  coverImage  String   @default("")
+  category    String   @default("Guides")
+  tags        String   @default("")
+  author      String   @default("All Black Limo SF")
+  readMinutes Int      @default(6)
+  published   Boolean  @default(false)
+  featured    Boolean  @default(false)
+  seoTitle       String?
+  seoDescription String?
+  seoKeywords    String?
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([published, publishedAt])
+  @@index([featured])
+}
+
+// ---------- Site Content / Settings ----------
+
+model SiteSetting {
+  id    String @id
+  key   String @unique
+  value String @default("")
+
+  @@index([key])
+}
+
+// ---------- Visit Tracking ----------
+
+model Visit {
+  id        String   @id @default(cuid())
+  path      String
+  referrer  String?  @default("")
+  userAgent String?  @default("")
+  country   String?  @default("")
+  city      String?  @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+}
+
+model VisitCounter {
+  id    String @id @default("global")
+  total Int    @default(0)
+  day  String @default("")
+  week String @default("")
+  month String @default("")
+  year String @default("")
+  dayCount  Int @default(0)
+  weekCount Int @default(0)
+  monthCount Int @default(0)
+  yearCount Int @default(0)
+}

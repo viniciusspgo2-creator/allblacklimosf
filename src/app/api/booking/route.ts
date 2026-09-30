@@ -37,26 +37,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, status: "invalid", reason: hp.reason }, { status: 400 });
     }
 
-    const firstName = cleanLine(body.first_name, 80);
-    const lastName = cleanLine(body.last_name, 80);
+    const firstName = cleanLine(body.first_name || body.firstName, 80);
+    const lastName = cleanLine(body.last_name || body.lastName, 80);
     const email = validateEmail(body.email);
     const phone = cleanLine(body.phone, 40);
-    const serviceType = cleanLine(body.service_type, 100);
-    const vehicleType = cleanLine(body.vehicle_type, 100);
-    const pickupDate = cleanLine(body.pickup_date, 10);
-    const pickupDateDisplay = cleanLine(body.pickup_date_display, 10);
-    const pickupTime = cleanLine(body.pickup_time, 5);
+    const serviceType = cleanLine(body.service_type || body.serviceType, 100);
+    const vehicleType = cleanLine(body.vehicle_type || body.vehicleType, 100);
+    const pickupDate = cleanLine(body.pickup_date || body.pickupDate, 10);
+    const pickupDateDisplay = cleanLine(body.pickup_date_display || body.pickupDateDisplay, 10);
+    const pickupTime = cleanLine(body.pickup_time || body.pickupTime, 5);
     const passengers = Number(body.passengers);
     const luggage = Number(body.luggage || 0);
-    const pickupAddress = cleanLine(body.pickup_address, 220);
-    const dropoffAddress = cleanLine(body.dropoff_address, 220);
-    const flightNumber = cleanLine(body.flight_number, 30);
+    const pickupAddress = cleanLine(body.pickup_address || body.pickupAddress, 220);
+    const dropoffAddress = cleanLine(body.dropoff_address || body.dropoffAddress, 220);
+    const flightNumber = cleanLine(body.flight_number || body.flightNumber, 30);
     const hours = body.hours ? Number(body.hours) : null;
     const couponCode = cleanLine(body.coupon_code, 40);
     const notes = cleanText(body.notes, 2000);
     const consent = body.consent === "1" || body.consent === 1 || body.consent === true;
-    const distanceKm = body.distance_km ? Number(body.distance_km) : null;
-    const durationMin = body.duration_min ? Number(body.duration_min) : null;
+    const distanceKm = body.distance_km || body.distanceKm ? Number(body.distance_km || body.distanceKm) : null;
+    const durationMin = body.duration_min || body.durationMin ? Number(body.duration_min || body.durationMin) : null;
 
     // Normalize date
     let finalDate = pickupDate;

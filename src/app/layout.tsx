@@ -55,6 +55,14 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  // Google Search Console — HTML tag verification (renders
+  // <meta name="google-site-verification" ...> inside <head> on every page).
+  // Do NOT remove: Google re-checks it periodically to keep ownership.
+  verification: {
+    google:
+      process.env.NEXT_PUBLIC_GSC_VERIFICATION ||
+      "wIrIjng3L0a7i-W0rXooJw4_2IDZYN7S4i047e4gzss",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",

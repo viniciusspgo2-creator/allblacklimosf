@@ -22,6 +22,61 @@ type Suggestion = {
 
 type Category = "airport" | "hotel" | "landmark" | "restaurant" | "transport" | "address" | "place";
 
+/**
+ * Bay Area airports, curated locally. Photon (OpenStreetMap) does not index
+ * IATA codes, so typing "SFO" returned nothing and customers had to type a
+ * street address they don't know. These always match on the IATA code, the
+ * airport name, or the word "airport" and appear first in the suggestions.
+ */
+const AIRPORTS: Array<{ code: string; name: string; address: string; city: string; lat: number; lon: number; keywords: string }> = [
+  {
+    code: "SFO",
+    name: "San Francisco International Airport",
+    address: "780 S Airport Blvd",
+    city: "San Francisco",
+    lat: 37.6213,
+    lon: -122.379,
+    keywords: "sfo san francisco international airport",
+  },
+  {
+    code: "OAK",
+    name: "Oakland International Airport",
+    address: "1 Airport Dr",
+    city: "Oakland",
+    lat: 37.7126,
+    lon: -122.2197,
+    keywords: "oak oakland international airport",
+  },
+  {
+    code: "SJC",
+    name: "Norman Y. Mineta San José International Airport",
+    address: "1701 Airport Blvd",
+    city: "San José",
+    lat: 37.3639,
+    lon: -121.9289,
+    keywords: "sjc san jose mineta airport",
+  },
+];
+
+function matchAirports(q: string): Suggestion[] {
+  const needle = q.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  return AIRPORTS.filter((a) => {
+    if (a.code.toLowerCase().startsWith(needle)) return true;
+    if (a.keywords.includes(needle)) return true;
+    if (needle.includes("airport") || needle.includes("aeroporto")) return true;
+    return false;
+  }).map((a) => ({
+    label: `${a.name} (${a.code}), ${a.address}, ${a.city}, CA`,
+    lat: a.lat,
+    lon: a.lon,
+    category: "airport" as Category,
+    icon: "fa-plane-arrival",
+    primary: `${a.name} (${a.code})`,
+    secondary: `${a.address}, ${a.city}, CA`,
+  }));
+}
+
 function categorize(props: Record<string, string | undefined>): { category: Category; icon: string } {
   const osmId = props.osm_id || "";
   const osmValue = props.osm_value || "";
@@ -110,6 +165,9 @@ export function AddressAutocomplete({ id, placeholder, value, onSelect, variant 
     setLoading(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
+      // Airports (SFO, OAK, SJC) are matched locally and always come first —
+      // Photon does not index IATA codes, so "SFO" alone returned nothing.
+      const airportMatches = matchAirports(q);
       try {
         const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(4000) });
         const data = await res.json();
@@ -127,12 +185,19 @@ export function AddressAutocomplete({ id, placeholder, value, onSelect, variant 
               : null;
           return { label, lat: coords ? coords[0] : null, lon: coords ? coords[1] : null, category, icon, primary, secondary };
         });
-        setItems(list);
-        setOpen(list.length > 0);
+        // Dedupe: skip a Photon result when it is the same airport we already show.
+        const airportNames = new Set(airportMatches.map((a) => a.primary.toLowerCase()));
+        const merged = [
+          ...airportMatches,
+          ...list.filter((s) => !airportNames.has(s.primary.toLowerCase())),
+        ];
+        setItems(merged);
+        setOpen(merged.length > 0);
         setActive(-1);
       } catch {
-        setItems([]);
-        setOpen(false);
+        // Photon failed: still show the local airport matches, if any.
+        setItems(airportMatches);
+        setOpen(airportMatches.length > 0);
       } finally {
         setLoading(false);
       }

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { site, services as serviceMap, fleet } from "@/lib/site-data";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { TimePicker } from "@/components/time-picker";
 import { TripMap } from "@/components/trip-map";
 import type { RouteInfo } from "@/components/trip-map";
 import { BookingNoticeModal } from "@/components/booking-notice-modal";
@@ -42,7 +43,6 @@ type RidePreferences = {
   passengers: number;
   luggage: number;
   flightNumber: string;
-  hours: string;
   couponCode: string;
   notes: string;
   consent: boolean;
@@ -91,7 +91,6 @@ export function BookingWizard() {
     passengers: 1,
     luggage: 0,
     flightNumber: "",
-    hours: "",
     couponCode: "",
     notes: "",
     consent: false,
@@ -191,7 +190,6 @@ export function BookingWizard() {
         pickup_address: trip.pickup,
         dropoff_address: trip.destination,
         flight_number: prefs.flightNumber,
-        hours: prefs.hours ? Number(prefs.hours) : "",
         coupon_code: prefs.couponCode,
         notes: prefs.notes,
         consent: prefs.consent ? "1" : "",
@@ -589,27 +587,14 @@ export function BookingWizard() {
                   </div>
                   <div className="field field--premium">
                     <label htmlFor="pickup_time">Pickup time *</label>
-                    <input
+                    <TimePicker
                       id="pickup_time"
-                      type="time"
-                      value={pickupTimeIso}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!val) {
-                          setPrefs({ ...prefs, pickupHour: "", pickupMinute: "", pickupPeriod: "" });
-                          return;
-                        }
-                        const [h, m] = val.split(":").map(Number);
-                        const period: "AM" | "PM" = h >= 12 ? "PM" : "AM";
-                        const hour12 = h % 12 === 0 ? 12 : h % 12;
-                        setPrefs({
-                          ...prefs,
-                          pickupHour: String(hour12),
-                          pickupMinute: String(m),
-                          pickupPeriod: period,
-                        });
-                      }}
-                      required
+                      hour={prefs.pickupHour}
+                      minute={prefs.pickupMinute}
+                      period={prefs.pickupPeriod}
+                      onChange={(hour, minute, period) =>
+                        setPrefs({ ...prefs, pickupHour: hour, pickupMinute: minute, pickupPeriod: period })
+                      }
                     />
                     <small className="field-hint">San Francisco local time (PT)</small>
                   </div>
@@ -649,19 +634,6 @@ export function BookingWizard() {
                       onChange={(e) => setPrefs({ ...prefs, flightNumber: e.target.value })}
                     />
                   </div>
-                  <div className="field field--premium">
-                    <label htmlFor="hours">Estimated hours</label>
-                    <input
-                      id="hours"
-                      type="number"
-                      min={1}
-                      max={24}
-                      placeholder="For hourly service"
-                      value={prefs.hours}
-                      onChange={(e) => setPrefs({ ...prefs, hours: e.target.value })}
-                    />
-                  </div>
-
                   <div className="field field--full field--premium">
                     <label htmlFor="coupon_code">Discount coupon</label>
                     <input

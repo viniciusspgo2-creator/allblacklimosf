@@ -21,6 +21,7 @@ type Suggestion = {
 };
 
 import { US_AIRPORTS } from "@/lib/airports";
+import { SF_LANDMARKS } from "@/lib/sf-landmarks";
 
 type Category = "airport" | "hotel" | "landmark" | "restaurant" | "transport" | "address" | "place";
 
@@ -41,9 +42,9 @@ const BAY_AREA_CODES = new Set(BAY_AREA_AIRPORTS.map((a) => a.code));
  * Match airports by IATA code or name. Photon (OpenStreetMap) does not index
  * IATA codes, so typing "SFO" returned nothing and customers had to type a
  * street address they don't know. In the US, airports are normally referred
- * to by code, so every US commercial airport (872, see @/lib/airports) is
- * searchable here. Ranking: exact IATA code, IATA prefix, name/city match;
- * California first inside each tier. At most 6 are shown.
+ * to by code, so every US airport that has an IATA code (1,943, see
+ * @/lib/airports) is searchable here. Ranking: exact IATA code, IATA prefix,
+ * name/city match; California first inside each tier. At most 6 are shown.
  */
 function matchAirports(q: string): Suggestion[] {
   const needle = q.trim().toLowerCase();
@@ -96,6 +97,42 @@ function matchAirports(q: string): Suggestion[] {
     const [code, name, city, state, lat, lon] = row;
     out.push(toSuggestion(code, name, `${city}, ${state}`, lat, lon));
     seen.add(code);
+  }
+  return out;
+}
+
+/**
+ * Match famous San Francisco landmarks by name or alias. Photon ranks by
+ * text match, so "Union Square" returned New York and Phoenix first and
+ * the San Francisco one didn't even make the top 6 (the ", USA" suffix
+ * made it worse). These 46 landmarks are matched locally and shown first,
+ * so the SF place always wins. Exact name match first, then alias/name
+ * contains. At most 4 are shown.
+ */
+function matchLandmarks(q: string): Suggestion[] {
+  const needle = q.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  const exact: typeof SF_LANDMARKS = [];
+  const contains: typeof SF_LANDMARKS = [];
+  for (const row of SF_LANDMARKS) {
+    const [name, keywords, , city] = row;
+    const hay = `${name} ${keywords} ${city}`.toLowerCase();
+    if (name.toLowerCase() === needle || name.toLowerCase().startsWith(needle)) exact.push(row);
+    else if (hay.includes(needle)) contains.push(row);
+  }
+  const out: Suggestion[] = [];
+  for (const row of [...exact, ...contains]) {
+    if (out.length >= 4) break;
+    const [name, , address, city, lat, lon] = row;
+    out.push({
+      label: address ? `${name}, ${address}, ${city}, CA` : `${name}, ${city}, CA`,
+      lat,
+      lon,
+      category: "landmark" as Category,
+      icon: "fa-landmark",
+      primary: name,
+      secondary: address ? `${address}, ${city}, CA` : `${city}, CA`,
+    });
   }
   return out;
 }
@@ -188,9 +225,13 @@ export function AddressAutocomplete({ id, placeholder, value, onSelect, variant 
     setLoading(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
-      // Airports (SFO, OAK, SJC) are matched locally and always come first —
+      // Airports (SFO, OAK, SJC...) are matched locally and always come first —
       // Photon does not index IATA codes, so "SFO" alone returned nothing.
+      // SF landmarks (Union Square, Fisherman's Wharf...) are matched locally
+      // too, right after the airports — Photon ranks New York first for
+      // names that exist in several cities.
       const airportMatches = matchAirports(q);
+      const landmarkMatches = matchLandmarks(q);
       try {
         const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(4000) });
         const data = await res.json();
@@ -208,19 +249,25 @@ export function AddressAutocomplete({ id, placeholder, value, onSelect, variant 
               : null;
           return { label, lat: coords ? coords[0] : null, lon: coords ? coords[1] : null, category, icon, primary, secondary };
         });
-        // Dedupe: skip a Photon result when it is the same airport we already show.
-        const airportNames = new Set(airportMatches.map((a) => a.primary.toLowerCase()));
+        // Dedupe: skip a Photon result when it is the same airport or
+        // landmark we already show.
+        const localNames = new Set([
+          ...airportMatches.map((a) => a.primary.toLowerCase()),
+          ...landmarkMatches.map((a) => a.primary.toLowerCase()),
+        ]);
         const merged = [
           ...airportMatches,
-          ...list.filter((s) => !airportNames.has(s.primary.toLowerCase())),
+          ...landmarkMatches,
+          ...list.filter((s) => !localNames.has(s.primary.toLowerCase())),
         ];
         setItems(merged);
         setOpen(merged.length > 0);
         setActive(-1);
       } catch {
-        // Photon failed: still show the local airport matches, if any.
-        setItems(airportMatches);
-        setOpen(airportMatches.length > 0);
+        // Photon failed: still show the local airport and landmark matches.
+        const local = [...airportMatches, ...landmarkMatches];
+        setItems(local);
+        setOpen(local.length > 0);
       } finally {
         setLoading(false);
       }

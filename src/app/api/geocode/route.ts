@@ -19,9 +19,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ features: [] });
     }
 
-    // Photon accepts a "lat" and "lon" parameter to bias results toward a location.
+    // Photon accepts "lat" and "lon" to bias results toward a location.
     // We bias toward San Francisco (37.7749, -122.4194) for the limo service.
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q + ", USA")}&limit=6&lat=37.7749&lon=-122.4194`;
+    //
+    // DO NOT append ", USA" to the query: it makes Photon match the token
+    // "USA" as text, so "Union Square, USA" returned businesses with USA in
+    // the name (Rookie USA, Mediamakers USA) and pushed Union Square SF out
+    // of the top 6. Without the suffix, SF shows up.
+    //
+    // Results are sorted by distance to San Francisco, so when a place name
+    // exists in several cities (Union Square, Washington Square...), the
+    // San Francisco one comes first instead of New York.
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=8&lat=37.7749&lon=-122.4194`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -32,8 +41,22 @@ export async function GET(request: Request) {
       });
       clearTimeout(timeout);
       const data = await res.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const SF_LAT = 37.7749;
+      const SF_LON = -122.4194;
+      features.sort((a: { geometry?: { coordinates?: [number, number] } }, b: { geometry?: { coordinates?: [number, number] } }) => {
+        const da = distance(a?.geometry?.coordinates);
+        const db = distance(b?.geometry?.coordinates);
+        return da - db;
+      });
+      function distance(coords?: [number, number]) {
+        if (!Array.isArray(coords) || coords.length < 2) return Infinity;
+        const dLat = coords[1] - SF_LAT;
+        const dLon = coords[0] - SF_LON;
+        return dLat * dLat + dLon * dLon;
+      }
       // Return the full Photon response (features + properties)
-      return NextResponse.json(data || { features: [] });
+      return NextResponse.json({ ...data, features });
     } catch (e) {
       clearTimeout(timeout);
       console.error("[geocode] failed", e);

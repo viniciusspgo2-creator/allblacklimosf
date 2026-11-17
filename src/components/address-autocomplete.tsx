@@ -20,61 +20,84 @@ type Suggestion = {
   secondary: string;
 };
 
+import { US_AIRPORTS } from "@/lib/airports";
+
 type Category = "airport" | "hotel" | "landmark" | "restaurant" | "transport" | "address" | "place";
 
 /**
- * Bay Area airports, curated locally. Photon (OpenStreetMap) does not index
- * IATA codes, so typing "SFO" returned nothing and customers had to type a
- * street address they don't know. These always match on the IATA code, the
- * airport name, or the word "airport" and appear first in the suggestions.
+ * Bay Area airports with the exact street address (the limo pickup point).
+ * The general dataset below only carries city/state; these three are the
+ * ones customers use most, so they keep the full address and sort first.
  */
-const AIRPORTS: Array<{ code: string; name: string; address: string; city: string; lat: number; lon: number; keywords: string }> = [
-  {
-    code: "SFO",
-    name: "San Francisco International Airport",
-    address: "780 S Airport Blvd",
-    city: "San Francisco",
-    lat: 37.6213,
-    lon: -122.379,
-    keywords: "sfo san francisco international airport",
-  },
-  {
-    code: "OAK",
-    name: "Oakland International Airport",
-    address: "1 Airport Dr",
-    city: "Oakland",
-    lat: 37.7126,
-    lon: -122.2197,
-    keywords: "oak oakland international airport",
-  },
-  {
-    code: "SJC",
-    name: "Norman Y. Mineta San José International Airport",
-    address: "1701 Airport Blvd",
-    city: "San José",
-    lat: 37.3639,
-    lon: -121.9289,
-    keywords: "sjc san jose mineta airport",
-  },
+const BAY_AREA_AIRPORTS: Array<{ code: string; name: string; address: string; city: string; lat: number; lon: number }> = [
+  { code: "SFO", name: "San Francisco International Airport", address: "780 S Airport Blvd", city: "San Francisco", lat: 37.6213, lon: -122.379 },
+  { code: "OAK", name: "Oakland International Airport", address: "1 Airport Dr", city: "Oakland", lat: 37.7126, lon: -122.2197 },
+  { code: "SJC", name: "Norman Y. Mineta San José International Airport", address: "1701 Airport Blvd", city: "San José", lat: 37.3639, lon: -121.9289 },
 ];
 
+const BAY_AREA_CODES = new Set(BAY_AREA_AIRPORTS.map((a) => a.code));
+
+/**
+ * Match airports by IATA code or name. Photon (OpenStreetMap) does not index
+ * IATA codes, so typing "SFO" returned nothing and customers had to type a
+ * street address they don't know. In the US, airports are normally referred
+ * to by code, so every US commercial airport (872, see @/lib/airports) is
+ * searchable here. Ranking: exact IATA code, IATA prefix, name/city match;
+ * California first inside each tier. At most 6 are shown.
+ */
 function matchAirports(q: string): Suggestion[] {
   const needle = q.trim().toLowerCase();
   if (needle.length < 2) return [];
-  return AIRPORTS.filter((a) => {
-    if (a.code.toLowerCase().startsWith(needle)) return true;
-    if (a.keywords.includes(needle)) return true;
-    if (needle.includes("airport") || needle.includes("aeroporto")) return true;
-    return false;
-  }).map((a) => ({
-    label: `${a.name} (${a.code}), ${a.address}, ${a.city}, CA`,
-    lat: a.lat,
-    lon: a.lon,
+  const wantsAirport = needle.includes("airport") || needle.includes("aeroporto");
+
+  const toSuggestion = (code: string, name: string, secondary: string, lat: number, lon: number): Suggestion => ({
+    label: `${name} (${code}), ${secondary}`,
+    lat,
+    lon,
     category: "airport" as Category,
     icon: "fa-plane-arrival",
-    primary: `${a.name} (${a.code})`,
-    secondary: `${a.address}, ${a.city}, CA`,
-  }));
+    primary: `${name} (${code})`,
+    secondary,
+  });
+
+  const out: Suggestion[] = [];
+  const seen = new Set<string>();
+
+  // 1. Bay Area airports with the full street address, first.
+  for (const a of BAY_AREA_AIRPORTS) {
+    const hay = `${a.code} ${a.name} ${a.city}`.toLowerCase();
+    if (a.code.toLowerCase().startsWith(needle) || hay.includes(needle) || wantsAirport) {
+      out.push(toSuggestion(a.code, a.name, `${a.address}, ${a.city}, CA`, a.lat, a.lon));
+      seen.add(a.code);
+    }
+  }
+
+  // 2. Full US dataset, ranked.
+  const exact: typeof US_AIRPORTS = [];
+  const prefix: typeof US_AIRPORTS = [];
+  const text: typeof US_AIRPORTS = [];
+  for (const row of US_AIRPORTS) {
+    const [code, name, city, state] = row;
+    if (seen.has(code)) continue;
+    const codeLower = code.toLowerCase();
+    if (codeLower === needle) exact.push(row);
+    else if (codeLower.startsWith(needle)) prefix.push(row);
+    else if (wantsAirport || `${name} ${city}`.toLowerCase().includes(needle)) text.push(row);
+  }
+  const rank = (rows: typeof US_AIRPORTS) =>
+    rows.sort((a, b) => {
+      const caA = a[3] === "CA" ? 0 : 1;
+      const caB = b[3] === "CA" ? 0 : 1;
+      if (caA !== caB) return caA - caB;
+      return a[0].localeCompare(b[0]);
+    });
+  for (const row of [...rank(exact), ...rank(prefix), ...rank(text)]) {
+    if (out.length >= 6) break;
+    const [code, name, city, state, lat, lon] = row;
+    out.push(toSuggestion(code, name, `${city}, ${state}`, lat, lon));
+    seen.add(code);
+  }
+  return out;
 }
 
 function categorize(props: Record<string, string | undefined>): { category: Category; icon: string } {

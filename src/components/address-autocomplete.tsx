@@ -182,12 +182,19 @@ function buildLabel(props: Record<string, string | undefined>): { primary: strin
   const state = props.state || "";
   const postcode = props.postcode || "";
 
-  let primary = name || street;
-  if (!primary && housenumber) primary = `${housenumber} ${street}`.trim();
-  if (!primary) primary = city || "Location";
+  const streetAddress = `${housenumber} ${street}`.trim();
+  // House-number results have no `name` — without the housenumber here the
+  // exact address "333 Post Street" was shown as just "Post Street".
+  const primary = name || streetAddress || city || "Location";
 
-  let secondary = [name && street ? `${housenumber} ${street}`.trim() : "", city, state, postcode].filter(Boolean).join(", ");
-  if (!secondary) secondary = [city, state].filter(Boolean).join(", ");
+  let secondary = "";
+  if (name && streetAddress) {
+    secondary = [streetAddress, city, state, postcode].filter(Boolean).join(", ");
+  } else if (name) {
+    secondary = [city, state, postcode].filter(Boolean).join(", ");
+  } else {
+    secondary = [city, state, postcode].filter(Boolean).join(", ");
+  }
   if (!secondary) secondary = props.country || "";
 
   return { primary, secondary };

@@ -7,6 +7,7 @@ import Image from "next/image";
 import { site, services as serviceMap, fleet } from "@/lib/site-data";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { TimePicker } from "@/components/time-picker";
+import { DatePicker } from "@/components/date-picker";
 import { TripMap } from "@/components/trip-map";
 import type { RouteInfo } from "@/components/trip-map";
 import { BookingNoticeModal } from "@/components/booking-notice-modal";
@@ -573,16 +574,13 @@ export function BookingWizard() {
 
                   <div className="field field--premium">
                     <label htmlFor="pickup_date_display">Pickup date *</label>
-                    <input
+                    <DatePicker
                       id="pickup_date_display"
-                      type="date"
-                      min={todayIso}
                       value={prefs.pickupDateDisplay}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setPrefs({ ...prefs, pickupDateDisplay: val, pickupDate: val });
-                      }}
-                      required
+                      min={todayIso}
+                      onChange={(val) =>
+                        setPrefs({ ...prefs, pickupDateDisplay: val, pickupDate: val })
+                      }
                     />
                   </div>
                   <div className="field field--premium">
